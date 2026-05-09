@@ -6,7 +6,7 @@ export type Tool = {
   category: string
   type: ToolType
   url: string
-  icon: 'users' | 'bar-chart' | 'globe' | 'code'
+  icon: 'users' | 'bar-chart' | 'globe' | 'code' | 'check-square'
 }
 
 export const tools: Tool[] = [
@@ -25,6 +25,14 @@ export const tools: Tool[] = [
     type: 'iframe',
     url: 'https://finance-dashboard-phi-tawny-54.vercel.app/',
     icon: 'bar-chart',
+  },
+  {
+    id: 'habit-tracker',
+    name: 'Habit Tracker',
+    category: 'Productivity',
+    type: 'native',
+    url: '',
+    icon: 'check-square',
   },
 ]
 
