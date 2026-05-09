@@ -1,4 +1,5 @@
 import type { HabitStore, Habit } from './types'
+import { supabase } from '@/lib/supabase'
 
 const KEY = 'ap-habit-tracker'
 
@@ -24,6 +25,22 @@ export function loadStore(): HabitStore {
 export function saveStore(store: HabitStore): void {
   if (typeof window === 'undefined') return
   localStorage.setItem(KEY, JSON.stringify(store))
+}
+
+export async function loadFromSupabase(userId: string): Promise<HabitStore | null> {
+  const { data, error } = await supabase
+    .from('habit_tracker_data')
+    .select('data')
+    .eq('user_id', userId)
+    .single()
+  if (error || !data) return null
+  return data.data as HabitStore
+}
+
+export async function saveToSupabase(userId: string, store: HabitStore): Promise<void> {
+  await supabase
+    .from('habit_tracker_data')
+    .upsert({ user_id: userId, data: store, updated_at: new Date().toISOString() })
 }
 
 export function dateKey(year: number, month: number, day: number): string {

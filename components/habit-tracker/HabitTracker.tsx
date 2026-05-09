@@ -1,10 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { loadStore, saveStore, dateKey, getGlobalStreak } from './storage'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import type { User } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
+import { loadStore, saveStore, loadFromSupabase, saveToSupabase, dateKey, getGlobalStreak } from './storage'
 import type { HabitStore } from './types'
 import MonthView from './MonthView'
 import YearView from './YearView'
+import AuthGate from './AuthGate'
 
 type View = 'month' | 'year'
 
@@ -17,29 +20,76 @@ export default function HabitTracker() {
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
   const [store, setStore] = useState<HabitStore>({ habits: [], entries: {} })
-  const [mounted, setMounted] = useState(false)
+  const [user, setUser] = useState<User | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Auth listener + initial load
   useEffect(() => {
-    setStore(loadStore())
-    setMounted(true)
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const u = session?.user ?? null
+      setUser(u)
+      if (u) {
+        const remote = await loadFromSupabase(u.id)
+        if (remote) {
+          setStore(remote)
+          saveStore(remote) // sync local cache
+        } else {
+          // first time on this device — push local data up
+          const local = loadStore()
+          setStore(local)
+          await saveToSupabase(u.id, local)
+        }
+      }
+      setAuthLoading(false)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const u = session?.user ?? null
+      setUser(u)
+      if (u && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+        const remote = await loadFromSupabase(u.id)
+        if (remote) {
+          setStore(remote)
+          saveStore(remote)
+        } else {
+          const local = loadStore()
+          setStore(local)
+          await saveToSupabase(u.id, local)
+        }
+        setAuthLoading(false)
+      }
+      if (event === 'SIGNED_OUT') {
+        setStore({ habits: [], entries: {} })
+        setAuthLoading(false)
+      }
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   const updateStore = useCallback((next: HabitStore) => {
     setStore(next)
-    saveStore(next)
+    saveStore(next) // immediate local cache
+    // debounce remote save by 800ms to avoid hammering on rapid checkbox clicks
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      supabase.auth.getUser().then(({ data: { user: u } }) => {
+        if (u) saveToSupabase(u.id, next)
+      })
+    }, 800)
   }, [])
 
   const toggleEntry = useCallback((day: number, habitId: string) => {
     const key = dateKey(year, month, day)
     const current = store.entries[key]?.[habitId] ?? false
-    const next: HabitStore = {
+    updateStore({
       ...store,
       entries: {
         ...store.entries,
         [key]: { ...store.entries[key], [habitId]: !current },
       },
-    }
-    updateStore(next)
+    })
   }, [store, year, month, updateStore])
 
   const toggleToday = useCallback((habitId: string) => {
@@ -56,8 +106,16 @@ export default function HabitTracker() {
     else setMonth(m => m + 1)
   }
 
-  if (!mounted) {
-    return <div className="flex items-center justify-center h-64"><span className="text-zinc-500 text-sm">Loading...</span></div>
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <span className="text-zinc-500 text-sm">Loading…</span>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <AuthGate />
   }
 
   const todayKey = dateKey(today.getFullYear(), today.getMonth(), today.getDate())
@@ -94,24 +152,34 @@ export default function HabitTracker() {
           )}
         </div>
 
-        {/* View toggle */}
-        <div className="flex rounded-md border border-zinc-800 overflow-hidden">
+        <div className="flex items-center gap-3">
+          {/* Sign out */}
           <button
-            onClick={() => setView('month')}
-            className={`px-3 py-1.5 text-xs font-medium transition-colors ${view === 'month' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+            onClick={() => supabase.auth.signOut()}
+            className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
           >
-            Month
+            Sign out
           </button>
-          <button
-            onClick={() => setView('year')}
-            className={`px-3 py-1.5 text-xs font-medium transition-colors ${view === 'year' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
-          >
-            Year
-          </button>
+
+          {/* View toggle */}
+          <div className="flex rounded-md border border-zinc-800 overflow-hidden">
+            <button
+              onClick={() => setView('month')}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${view === 'month' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+            >
+              Month
+            </button>
+            <button
+              onClick={() => setView('year')}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${view === 'year' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+            >
+              Year
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Today quick-view — only shown when viewing current month */}
+      {/* Today quick-view */}
       {view === 'month' && isTodayVisible && store.habits.length > 0 && (
         <div className="mb-6 rounded-lg border border-zinc-800 bg-zinc-900 p-4">
           <div className="flex items-center justify-between mb-3">
@@ -166,7 +234,7 @@ export default function HabitTracker() {
         />
       )}
 
-      {/* Streak bar — fixed to bottom */}
+      {/* Streak bar */}
       {(() => {
         const { current, best } = getGlobalStreak(store)
         const label = current === 1 ? 'day' : 'days'
