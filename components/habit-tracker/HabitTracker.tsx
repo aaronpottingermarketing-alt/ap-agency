@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { loadStore, saveStore, dateKey } from './storage'
+import { loadStore, saveStore, dateKey, getGlobalStreak } from './storage'
 import type { HabitStore } from './types'
 import MonthView from './MonthView'
 import YearView from './YearView'
@@ -66,7 +66,7 @@ export default function HabitTracker() {
   const isTodayVisible = year === today.getFullYear() && month === today.getMonth()
 
   return (
-    <div className="min-h-full bg-zinc-950 text-zinc-100 p-4 md:p-6">
+    <div className="min-h-full bg-zinc-950 text-zinc-100 p-4 pb-20 md:p-6 md:pb-20">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
@@ -165,6 +165,30 @@ export default function HabitTracker() {
           onSelectMonth={(m) => { setMonth(m); setView('month') }}
         />
       )}
+
+      {/* Streak bar — fixed to bottom */}
+      {(() => {
+        const { current, best } = getGlobalStreak(store)
+        const label = current === 1 ? 'day' : 'days'
+        const message = current === 0 ? 'Start your streak today' : current < 3 ? 'Keep it going!' : current < 7 ? 'Building momentum 💪' : 'Unstoppable 🚀'
+        return (
+          <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-3 bg-zinc-950 border-t-2 border-emerald-500/40 md:left-60">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl leading-none">🔥</span>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500 leading-tight mb-0.5">Current Streak</p>
+                <p className="text-base font-bold text-emerald-400 leading-tight">{current} {label}</p>
+              </div>
+              <div className="w-px h-8 bg-zinc-800 mx-2" />
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500 leading-tight mb-0.5">Personal Best</p>
+                <p className="text-base font-bold text-zinc-300 leading-tight">{best} {best === 1 ? 'day' : 'days'}</p>
+              </div>
+            </div>
+            <p className="text-xs text-zinc-600 italic hidden sm:block">{message}</p>
+          </div>
+        )
+      })()}
     </div>
   )
 }
