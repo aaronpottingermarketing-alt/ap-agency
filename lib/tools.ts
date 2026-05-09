@@ -15,7 +15,7 @@ export const tools: Tool[] = [
     name: 'Client Dashboard',
     category: 'Clients',
     type: 'iframe',
-    url: 'https://client-dashboard-q668abfat.vercel.app/',
+    url: 'https://client-dashboard-omega-olive.vercel.app/',
     icon: 'users',
   },
   {
@@ -23,7 +23,7 @@ export const tools: Tool[] = [
     name: 'Finance Dashboard',
     category: 'Finance',
     type: 'iframe',
-    url: 'https://finance-dashboard-oexkpn90b.vercel.app/',
+    url: 'https://finance-dashboard-phi-tawny-54.vercel.app/',
     icon: 'bar-chart',
   },
 ]
