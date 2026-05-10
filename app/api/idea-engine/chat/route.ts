@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
-import fs from 'fs/promises'
-import path from 'path'
-import os from 'os'
 import type { IdeaEngineMode, ClientContext, SwipeContextStatus } from '@/components/idea-engine/types'
 
 const supabase = createClient(
@@ -17,8 +14,6 @@ function getAnthropic() {
 
 const CONTEXT_TABS = ['about', 'icp', 'voc', 'emotional_triggers', 'brand_voice', 'angles']
 
-const SWIPE_DIR = path.join(os.homedir(), 'Documents', 'Vault', 'Swipe')
-
 const EMOTION_KEYWORDS: Record<string, string[]> = {
   fear:        ['fear', 'afraid', 'scared', 'risk', 'danger', 'threat', 'warning', 'attack', 'breach', 'loss', 'lose'],
   desire:      ['desire', 'want', 'dream', 'achieve', 'success', 'results', 'breakthrough', 'finally', 'goal'],
@@ -28,27 +23,6 @@ const EMOTION_KEYWORDS: Record<string, string[]> = {
   shame:       ['shame', 'embarrass', 'failure', 'mistake', 'wrong', 'regret', 'guilt'],
   hope:        ['hope', 'possibility', 'change', 'new', 'discover', 'solution', 'finally'],
   curiosity:   ['secret', 'discover', 'hidden', 'unknown', 'reveal', 'truth', 'real reason', 'why'],
-}
-
-async function getAllSwipeFiles(): Promise<{ filePath: string; name: string }[]> {
-  const results: { filePath: string; name: string }[] = []
-
-  async function scan(dir: string) {
-    try {
-      const entries = await fs.readdir(dir, { withFileTypes: true })
-      for (const entry of entries) {
-        const full = path.join(dir, entry.name)
-        if (entry.isDirectory()) {
-          await scan(full)
-        } else if (entry.name.endsWith('.md') && !entry.name.startsWith('_')) {
-          results.push({ filePath: full, name: entry.name.replace(/\.md$/, '') })
-        }
-      }
-    } catch {}
-  }
-
-  await scan(SWIPE_DIR)
-  return results
 }
 
 function detectEmotions(emotionalTriggers: string): string[] {
@@ -70,7 +44,11 @@ function pickRandom<T>(arr: T[], n: number): T[] {
 }
 
 async function loadSwipeContext(emotionalTriggers: string): Promise<SwipeContextStatus & { content: string }> {
-  const files = await getAllSwipeFiles()
+  const { data: rows } = await supabase
+    .from('vault_swipe_files')
+    .select('name, content')
+
+  const files = rows ?? []
 
   if (files.length === 0) {
     return { content: '', files: [], matchType: 'none', emotions: [] }
@@ -90,8 +68,8 @@ async function loadSwipeContext(emotionalTriggers: string): Promise<SwipeContext
       selected = scored.slice(0, 3)
       matchType = 'emotional'
     } else {
-      const usedPaths = new Set(scored.map(f => f.filePath))
-      const remaining = files.filter(f => !usedPaths.has(f.filePath))
+      const usedNames = new Set(scored.map(f => f.name))
+      const remaining = files.filter(f => !usedNames.has(f.name))
       selected = [...scored, ...pickRandom(remaining, 3 - scored.length)]
       matchType = scored.length > 0 ? 'emotional' : 'random'
     }
@@ -100,21 +78,12 @@ async function loadSwipeContext(emotionalTriggers: string): Promise<SwipeContext
     matchType = 'random'
   }
 
-  const excerpts = await Promise.all(
-    selected.map(async f => {
-      try {
-        const raw = await fs.readFile(f.filePath, 'utf-8')
-        return `--- SWIPE: ${f.name} ---\n${raw.slice(0, 1500).trimEnd()}\n[excerpt]`
-      } catch {
-        return null
-      }
-    })
+  const excerpts = selected.map(f =>
+    `--- SWIPE: ${f.name} ---\n${f.content.slice(0, 1500).trimEnd()}\n[excerpt]`
   )
 
-  const validExcerpts = excerpts.filter(Boolean) as string[]
-
   return {
-    content: validExcerpts.join('\n\n'),
+    content: excerpts.join('\n\n'),
     files: selected.map(f => f.name),
     matchType,
     emotions,

@@ -205,6 +205,10 @@ export default function IdeaEngine() {
         </div>
 
         <ModeSelector mode={mode} onChange={handleModeChange} />
+
+        <div className="ml-auto shrink-0">
+          <SwipeSyncButton />
+        </div>
       </div>
 
       {/* Three-panel body */}
@@ -245,5 +249,41 @@ export default function IdeaEngine() {
         </div>
       </div>
     </div>
+  )
+}
+
+function SwipeSyncButton() {
+  const [status, setStatus] = useState<'idle' | 'syncing' | 'done' | 'error'>('idle')
+  const [count, setCount] = useState<number | null>(null)
+
+  const sync = async () => {
+    setStatus('syncing')
+    try {
+      const res = await fetch('/api/idea-engine/sync-swipe', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setCount(data.synced)
+      setStatus('done')
+      setTimeout(() => setStatus('idle'), 3000)
+    } catch {
+      setStatus('error')
+      setTimeout(() => setStatus('idle'), 3000)
+    }
+  }
+
+  return (
+    <button
+      onClick={sync}
+      disabled={status === 'syncing'}
+      className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-100 border border-zinc-800 hover:border-zinc-600 rounded-md px-2.5 py-1.5 transition-colors disabled:opacity-50"
+    >
+      <svg className={status === 'syncing' ? 'animate-spin' : ''} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 12a9 9 0 0 1 15.6-6.1L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.6 6.1L3 16"/><path d="M3 21v-5h5"/>
+      </svg>
+      {status === 'syncing' && 'Syncing swipe…'}
+      {status === 'done' && `Synced ${count} files`}
+      {status === 'error' && 'Sync failed'}
+      {status === 'idle' && 'Sync swipe vault'}
+    </button>
   )
 }
