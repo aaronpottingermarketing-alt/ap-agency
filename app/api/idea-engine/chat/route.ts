@@ -8,7 +8,9 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+function getAnthropic() {
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+}
 
 const CONTEXT_TABS = ['about', 'icp', 'voc', 'emotional_triggers', 'brand_voice', 'angles']
 
@@ -85,7 +87,7 @@ export async function POST(req: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const anthropicStream = await anthropic.messages.stream({
+        const anthropicStream = await getAnthropic().messages.stream({
           model: 'claude-sonnet-4-6',
           max_tokens: 2000,
           system: systemPrompt,

@@ -66,13 +66,15 @@ export default function IdeaEngine() {
   }
 
   const loadSession = async (session: IdeaSession) => {
-    setActiveSessionId(session.id)
-    setMode(session.mode)
-    setMessages(session.messages)
+    // Fetch full session (list endpoint omits messages for performance)
+    const res = await fetch(`/api/idea-engine/sessions/${session.id}`)
+    const full: IdeaSession = res.ok ? await res.json() : session
+    setActiveSessionId(full.id)
+    setMode(full.mode)
+    setMessages(full.messages ?? [])
     setStreamingText('')
-    // Switch client to match session if needed
-    if (session.client_id) {
-      const match = clients.find(c => c.id === session.client_id)
+    if (full.client_id) {
+      const match = clients.find(c => c.id === full.client_id)
       if (match) setActiveClient(match)
     }
   }
