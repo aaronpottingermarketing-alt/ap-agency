@@ -50,6 +50,14 @@ export const tools: Tool[] = [
     url: '',
     icon: 'lightbulb',
   },
+  {
+    id: 'idea-engine',
+    name: 'Idea Engine',
+    category: 'Copy',
+    type: 'native',
+    url: '',
+    icon: 'lightbulb',
+  },
 ]
 
 export const categories = [...new Set(tools.map((t) => t.category))]

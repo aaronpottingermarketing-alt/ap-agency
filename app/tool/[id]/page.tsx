@@ -4,6 +4,7 @@ import IframeView from '@/components/IframeView'
 import HabitTracker from '@/components/habit-tracker/HabitTracker'
 import Ideas from '@/components/ideas/Ideas'
 import AdStudio from '@/components/ad-studio/AdStudio'
+import IdeaEngine from '@/components/idea-engine/IdeaEngine'
 
 export function generateStaticParams() {
   return tools.map((t) => ({ id: t.id }))
@@ -43,6 +44,14 @@ export default async function ToolPage(props: PageProps<'/tool/[id]'>) {
     return (
       <div className="h-full overflow-auto bg-zinc-950">
         <Ideas />
+      </div>
+    )
+  }
+
+  if (tool.type === 'native' && tool.id === 'idea-engine') {
+    return (
+      <div className="h-full overflow-hidden bg-zinc-950">
+        <IdeaEngine />
       </div>
     )
   }
