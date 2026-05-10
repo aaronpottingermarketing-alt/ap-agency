@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
-import type { IdeaEngineMode, ClientContext } from '@/components/idea-engine/types'
+import fs from 'fs/promises'
+import path from 'path'
+import os from 'os'
+import type { IdeaEngineMode, ClientContext, SwipeContextStatus } from '@/components/idea-engine/types'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,6 +16,110 @@ function getAnthropic() {
 }
 
 const CONTEXT_TABS = ['about', 'icp', 'voc', 'emotional_triggers', 'brand_voice', 'angles']
+
+const SWIPE_DIR = path.join(os.homedir(), 'Documents', 'Vault', 'Swipe')
+
+const EMOTION_KEYWORDS: Record<string, string[]> = {
+  fear:        ['fear', 'afraid', 'scared', 'risk', 'danger', 'threat', 'warning', 'attack', 'breach', 'loss', 'lose'],
+  desire:      ['desire', 'want', 'dream', 'achieve', 'success', 'results', 'breakthrough', 'finally', 'goal'],
+  frustration: ['frustrat', 'tired', 'fed up', 'struggl', 'hate', 'sick of', 'enough', 'wasted', 'annoyed'],
+  aspiration:  ['aspir', 'ambiti', 'vision', 'future', 'become', 'level up', 'reach', 'build'],
+  identity:    ['identity', 'who you are', 'reputation', 'status', 'belong', 'pride', 'respect', 'self'],
+  shame:       ['shame', 'embarrass', 'failure', 'mistake', 'wrong', 'regret', 'guilt'],
+  hope:        ['hope', 'possibility', 'change', 'new', 'discover', 'solution', 'finally'],
+  curiosity:   ['secret', 'discover', 'hidden', 'unknown', 'reveal', 'truth', 'real reason', 'why'],
+}
+
+async function getAllSwipeFiles(): Promise<{ filePath: string; name: string }[]> {
+  const results: { filePath: string; name: string }[] = []
+
+  async function scan(dir: string) {
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true })
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          await scan(full)
+        } else if (entry.name.endsWith('.md') && !entry.name.startsWith('_')) {
+          results.push({ filePath: full, name: entry.name.replace(/\.md$/, '') })
+        }
+      }
+    } catch {}
+  }
+
+  await scan(SWIPE_DIR)
+  return results
+}
+
+function detectEmotions(emotionalTriggers: string): string[] {
+  const lower = emotionalTriggers.toLowerCase()
+  return Object.entries(EMOTION_KEYWORDS)
+    .filter(([, keywords]) => keywords.some(kw => lower.includes(kw)))
+    .map(([emotion]) => emotion)
+}
+
+function scoreFile(name: string, emotions: string[]): number {
+  const lower = name.toLowerCase()
+  return emotions.reduce((score, emotion) => {
+    return score + (EMOTION_KEYWORDS[emotion] ?? []).filter(kw => lower.includes(kw)).length
+  }, 0)
+}
+
+function pickRandom<T>(arr: T[], n: number): T[] {
+  return [...arr].sort(() => Math.random() - 0.5).slice(0, n)
+}
+
+async function loadSwipeContext(emotionalTriggers: string): Promise<SwipeContextStatus & { content: string }> {
+  const files = await getAllSwipeFiles()
+
+  if (files.length === 0) {
+    return { content: '', files: [], matchType: 'none', emotions: [] }
+  }
+
+  const emotions = detectEmotions(emotionalTriggers)
+  let selected: typeof files
+  let matchType: SwipeContextStatus['matchType']
+
+  if (emotions.length > 0) {
+    const scored = files
+      .map(f => ({ ...f, score: scoreFile(f.name, emotions) }))
+      .filter(f => f.score > 0)
+      .sort((a, b) => b.score - a.score)
+
+    if (scored.length >= 3) {
+      selected = scored.slice(0, 3)
+      matchType = 'emotional'
+    } else {
+      const usedPaths = new Set(scored.map(f => f.filePath))
+      const remaining = files.filter(f => !usedPaths.has(f.filePath))
+      selected = [...scored, ...pickRandom(remaining, 3 - scored.length)]
+      matchType = scored.length > 0 ? 'emotional' : 'random'
+    }
+  } else {
+    selected = pickRandom(files, 3)
+    matchType = 'random'
+  }
+
+  const excerpts = await Promise.all(
+    selected.map(async f => {
+      try {
+        const raw = await fs.readFile(f.filePath, 'utf-8')
+        return `--- SWIPE: ${f.name} ---\n${raw.slice(0, 1500).trimEnd()}\n[excerpt]`
+      } catch {
+        return null
+      }
+    })
+  )
+
+  const validExcerpts = excerpts.filter(Boolean) as string[]
+
+  return {
+    content: validExcerpts.join('\n\n'),
+    files: selected.map(f => f.name),
+    matchType,
+    emotions,
+  }
+}
 
 async function loadClientContext(clientId: string): Promise<{ name: string; context: ClientContext }> {
   const [clientRes, ctxRes] = await Promise.all([
@@ -28,7 +135,13 @@ async function loadClientContext(clientId: string): Promise<{ name: string; cont
   return { name, context }
 }
 
-function buildSystemPrompt(mode: IdeaEngineMode, clientName: string, ctx: ClientContext, swipeText?: string): string {
+function buildSystemPrompt(
+  mode: IdeaEngineMode,
+  clientName: string,
+  ctx: ClientContext,
+  swipeContent: string,
+  swipeText?: string
+): string {
   const base = `You are a direct-response copywriting strategist helping ${clientName}.
 
 CLIENT CONTEXT:
@@ -38,6 +151,10 @@ Voice of Customer: ${ctx.voc || '(not set)'}
 Emotional Triggers: ${ctx.emotional_triggers || '(not set)'}
 Brand Voice: ${ctx.brand_voice || '(not set)'}
 Existing Angles: ${ctx.angles || '(not set)'}`
+
+  const swipeSection = swipeContent.trim()
+    ? `\n\nSWIPE REFERENCE MATERIAL (study the emotional mechanics, structural patterns, and hook techniques — do NOT copy claims, product details, or specifics):\n${swipeContent}`
+    : ''
 
   const modeInstructions: Record<IdeaEngineMode, string> = {
     angle_mining: `
@@ -61,7 +178,10 @@ Take the confirmed angle and generate 10 hook variations. Cover: direct statemen
 ${swipeText ? `COMPETITOR AD TO ANALYSE:\n${swipeText}\n\n` : ''}Analyse the competitor ad provided. Identify: the core angle, the mechanism implied, the emotional trigger being used, the awareness level it targets, and the structural technique. Then propose 3 specific ways to apply the same logic to ${clientName}'s offer. Be specific — name the angle, mechanism, and hook structure for each.`,
   }
 
-  return base + modeInstructions[mode]
+  // Swipe Analyzer already has explicit content — don't inject vault swipe on top
+  const swipeBlock = mode === 'swipe_analyzer' ? '' : swipeSection
+
+  return base + swipeBlock + modeInstructions[mode]
 }
 
 export async function POST(req: NextRequest) {
@@ -79,7 +199,12 @@ export async function POST(req: NextRequest) {
   }
 
   const { name: clientName, context } = await loadClientContext(clientId)
-  const systemPrompt = buildSystemPrompt(mode, clientName, context, swipeText)
+
+  const swipeCtx = mode === 'swipe_analyzer'
+    ? { content: '', files: [], matchType: 'none' as const, emotions: [] }
+    : await loadSwipeContext(context.emotional_triggers)
+
+  const systemPrompt = buildSystemPrompt(mode, clientName, context, swipeCtx.content, swipeText)
 
   const encoder = new TextEncoder()
   let fullText = ''
@@ -101,7 +226,6 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Persist session directly via Supabase
         const allMessages = [
           ...messages,
           { role: 'assistant' as const, content: fullText, timestamp: new Date().toISOString() },
@@ -122,7 +246,13 @@ export async function POST(req: NextRequest) {
           savedSessionId = newSession?.id
         }
 
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, sessionId: savedSessionId })}\n\n`))
+        const swipeStatus: SwipeContextStatus = {
+          files: swipeCtx.files,
+          matchType: swipeCtx.matchType,
+          emotions: swipeCtx.emotions,
+        }
+
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, sessionId: savedSessionId, swipeContext: swipeStatus })}\n\n`))
         controller.close()
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Chat failed'

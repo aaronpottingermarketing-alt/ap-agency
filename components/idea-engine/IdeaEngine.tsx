@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import type { BankIdea, IdeaEngineMode, IdeaSession, Message } from './types'
+import type { BankIdea, IdeaEngineMode, IdeaSession, Message, SwipeContextStatus } from './types'
 import ModeSelector from './ModeSelector'
 import ChatPanel from './ChatPanel'
 import IdeaBankPanel from './IdeaBankPanel'
@@ -17,6 +17,7 @@ export default function IdeaEngine() {
   const [sessions, setSessions] = useState<IdeaSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
+  const [swipeContext, setSwipeContext] = useState<SwipeContextStatus | null>(null)
 
   const [streaming, setStreaming] = useState(false)
   const [streamingText, setStreamingText] = useState('')
@@ -63,16 +64,17 @@ export default function IdeaEngine() {
     setActiveSessionId(null)
     setMessages([])
     setStreamingText('')
+    setSwipeContext(null)
   }
 
   const loadSession = async (session: IdeaSession) => {
-    // Fetch full session (list endpoint omits messages for performance)
     const res = await fetch(`/api/idea-engine/sessions/${session.id}`)
     const full: IdeaSession = res.ok ? await res.json() : session
     setActiveSessionId(full.id)
     setMode(full.mode)
     setMessages(full.messages ?? [])
     setStreamingText('')
+    setSwipeContext(null)
     if (full.client_id) {
       const match = clients.find(c => c.id === full.client_id)
       if (match) setActiveClient(match)
@@ -140,6 +142,7 @@ export default function IdeaEngine() {
               }
               setMessages(prev => [...prev, assistantMsg])
               setStreamingText('')
+              if (parsed.swipeContext) setSwipeContext(parsed.swipeContext)
               fetchSessions(activeClient.id)
             }
           } catch {}
@@ -226,6 +229,7 @@ export default function IdeaEngine() {
             clientId={activeClient?.id ?? null}
             clientName={activeClient?.name ?? ''}
             sessionId={activeSessionId}
+            swipeContext={swipeContext}
             onSend={handleSend}
             onIdeaSaved={handleIdeaSaved}
           />

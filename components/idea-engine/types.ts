@@ -54,6 +54,12 @@ export const MODE_LABELS: Record<IdeaEngineMode, string> = {
   swipe_analyzer: 'Swipe Analyzer',
 }
 
+export type SwipeContextStatus = {
+  files: string[]
+  matchType: 'emotional' | 'random' | 'none'
+  emotions: string[]
+}
+
 export const IDEA_TYPES = ['angle', 'hook', 'mechanism', 'big_idea'] as const
 export const IDEA_STATUSES = ['saved', 'testing', 'used', 'rejected'] as const
 export const EMOTION_OPTIONS = ['fear', 'desire', 'frustration', 'aspiration', 'curiosity', 'identity', 'shame', 'hope'] as const

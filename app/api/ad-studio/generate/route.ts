@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
+import fs from 'fs/promises'
+import path from 'path'
+import os from 'os'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,6 +11,51 @@ const supabase = createClient(
 )
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+const ADVERTORIALS_DIR = path.join(os.homedir(), 'Documents', 'Vault', 'Swipe', 'Advertorials')
+
+// Keywords to match advertorials to the client/angle context
+const KEYWORD_MAP: Record<string, string[]> = {
+  pain:       ['Pain-Relief', 'Neck-Cloud', 'KenkoBack', 'HealthyLabCo', 'XStance', 'Knee', 'Foot', 'Hip', 'Shoulder', 'Ankle'],
+  allergy:    ['Bandoo', 'AirJoi', 'Anti-Bacterial', 'Fungus'],
+  health:     ['HealthyLabCo', 'Nooro', 'Collagen', 'Sleep-Patch', 'Blissy', 'Anti-Snoring', 'Neuropathy'],
+  ecom:       ['Sneakers', 'Smartwatch', 'Photostick', 'Portable', 'Car', 'Baby', 'Glasses'],
+  security:   ['PreparedHero', 'Car-Safety', 'Gas-Saving'],
+  supplement: ['Collagen', 'Apetropics', 'Arthrozene', 'Nuubu'],
+  default:    ['HealthyLabCo-Shoulder-Brace', 'Nooro-Knee-Massager', 'PreparedHero-Fire-Blanket-Advertorial-1'],
+}
+
+async function pickReferenceAdvertorials(clientName: string, angle: string, niche: string): Promise<string> {
+  let files: string[]
+  try {
+    files = await fs.readdir(ADVERTORIALS_DIR)
+  } catch {
+    return ''
+  }
+  files = files.filter(f => f.endsWith('.md') && !f.includes('1000-Buyers'))
+
+  // Pick category based on client/angle/niche keywords
+  const context = `${clientName} ${angle} ${niche}`.toLowerCase()
+  let category = 'default'
+  for (const [key] of Object.entries(KEYWORD_MAP)) {
+    if (context.includes(key)) { category = key; break }
+  }
+  if (niche.toLowerCase().includes('ecom')) category = 'ecom'
+
+  const candidates = KEYWORD_MAP[category]
+  const matched = files.filter(f => candidates.some(k => f.includes(k)))
+  const pool = matched.length >= 2 ? matched : files.filter(f => KEYWORD_MAP.default.some(k => f.includes(k)))
+  const picks = pool.slice(0, 2)
+
+  const excerpts = await Promise.all(picks.map(async fname => {
+    const content = await fs.readFile(path.join(ADVERTORIALS_DIR, fname), 'utf-8')
+    const trimmed = content.slice(0, 1800).trimEnd()
+    const title = fname.replace('.md', '').replace(/-/g, ' ')
+    return `--- REFERENCE: ${title} ---\n${trimmed}\n[...excerpt]`
+  }))
+
+  return excerpts.join('\n\n')
+}
 
 function buildPrompt(params: {
   type: string
@@ -18,11 +66,16 @@ function buildPrompt(params: {
   platform: string
   count: number
   vocContent: string
+  referenceAdvertorials?: string
 }) {
-  const { type, clientName, avatar, angle, awarenessLevel, platform, count, vocContent } = params
+  const { type, clientName, avatar, angle, awarenessLevel, platform, count, vocContent, referenceAdvertorials } = params
 
   const vocSection = vocContent.trim()
     ? `\n\nVOICE OF CUSTOMER DATA (use this exact language where possible):\n${vocContent}`
+    : ''
+
+  const refSection = referenceAdvertorials?.trim()
+    ? `\n\nREFERENCE ADVERTORIALS (study the structure, flow, and persuasion techniques — do NOT copy the product or claims):\n${referenceAdvertorials}`
     : ''
 
   const typeInstructions: Record<string, string> = {
@@ -38,7 +91,7 @@ CLIENT: ${clientName}
 AVATAR: ${avatar}
 ANGLE: ${angle}
 AWARENESS LEVEL: ${awarenessLevel}
-PLATFORM: ${platform}${vocSection}
+PLATFORM: ${platform}${vocSection}${refSection}
 
 TASK: ${typeInstructions[type] || typeInstructions.hooks}
 
@@ -77,6 +130,21 @@ export async function POST(req: NextRequest) {
     vocContent = ctx?.content ?? ''
   }
 
+  // Pull reference advertorials for script types to ground structure/format
+  let referenceAdvertorials = ''
+  if (type === 'ad_script' || type === 'vsl_script') {
+    const { data: clientRow } = await supabase
+      .from('clients')
+      .select('niche')
+      .eq('id', clientId)
+      .single()
+    referenceAdvertorials = await pickReferenceAdvertorials(
+      client.name,
+      angle ?? '',
+      clientRow?.niche ?? ''
+    )
+  }
+
   const prompt = buildPrompt({
     type,
     clientName: client.name,
@@ -86,6 +154,7 @@ export async function POST(req: NextRequest) {
     platform: platform ?? 'Meta',
     count: count ?? 10,
     vocContent,
+    referenceAdvertorials,
   })
 
   const encoder = new TextEncoder()

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { BankIdea, IdeaEngineMode, Message } from './types'
+import type { BankIdea, IdeaEngineMode, Message, SwipeContextStatus } from './types'
 import SaveIdeaModal from './SaveIdeaModal'
 
 type Props = {
@@ -12,6 +12,7 @@ type Props = {
   clientId: string | null
   clientName: string
   sessionId: string | null
+  swipeContext: SwipeContextStatus | null
   onSend: (text: string) => void
   onIdeaSaved: (idea: BankIdea) => void
 }
@@ -24,6 +25,7 @@ export default function ChatPanel({
   clientId,
   clientName,
   sessionId,
+  swipeContext,
   onSend,
   onIdeaSaved,
 }: Props) {
@@ -59,6 +61,8 @@ export default function ChatPanel({
         {(messages ?? []).length === 0 && !streaming && (
           <EmptyState mode={mode} />
         )}
+
+        {swipeContext && <ContextStatusPill swipeContext={swipeContext} />}
 
         {(messages ?? []).map((msg, i) => (
           <MessageBubble
@@ -167,6 +171,37 @@ function EmptyState({ mode }: { mode: IdeaEngineMode }) {
     <div className="flex-1 flex items-center justify-center">
       <div className="text-center max-w-xs">
         <p className="text-zinc-500 text-sm">{MODE_HINTS[mode]}</p>
+      </div>
+    </div>
+  )
+}
+
+function ContextStatusPill({ swipeContext }: { swipeContext: NonNullable<Props['swipeContext']> }) {
+  const { files, matchType, emotions } = swipeContext
+
+  const matchLabel =
+    matchType === 'emotional' ? `emotion match · ${emotions.join(' · ')}`
+    : matchType === 'random'  ? 'random — no emotion match'
+    :                           'none found'
+
+  const dotColour =
+    matchType === 'emotional' ? 'bg-green-500'
+    : matchType === 'random'  ? 'bg-yellow-500'
+    :                           'bg-zinc-600'
+
+  return (
+    <div className="flex items-start gap-2 px-1 pb-1">
+      <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${dotColour}`} />
+      <div className="flex flex-col gap-0.5">
+        <p className="text-[11px] text-zinc-500">
+          <span className="text-zinc-400 font-medium">Context loaded</span>
+          {' · '}swipe: {files.length > 0 ? `${files.length} files (${matchLabel})` : 'none found'}
+        </p>
+        {files.length > 0 && (
+          <p className="text-[10px] text-zinc-700 leading-relaxed">
+            {files.map(f => f.replace(/-/g, ' ')).join(' · ')}
+          </p>
+        )}
       </div>
     </div>
   )
