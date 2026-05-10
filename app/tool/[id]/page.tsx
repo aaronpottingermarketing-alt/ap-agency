@@ -1,7 +1,13 @@
 import { notFound } from 'next/navigation'
-import { getToolById } from '@/lib/tools'
+import { getToolById, tools } from '@/lib/tools'
 import IframeView from '@/components/IframeView'
 import HabitTracker from '@/components/habit-tracker/HabitTracker'
+import Ideas from '@/components/ideas/Ideas'
+import AdStudio from '@/components/ad-studio/AdStudio'
+
+export function generateStaticParams() {
+  return tools.map((t) => ({ id: t.id }))
+}
 
 export default async function ToolPage(props: PageProps<'/tool/[id]'>) {
   const { id } = await props.params
@@ -21,6 +27,22 @@ export default async function ToolPage(props: PageProps<'/tool/[id]'>) {
     return (
       <div className="h-full overflow-auto bg-zinc-950">
         <HabitTracker />
+      </div>
+    )
+  }
+
+  if (tool.type === 'native' && tool.id === 'ad-studio') {
+    return (
+      <div className="h-full overflow-hidden bg-zinc-950">
+        <AdStudio />
+      </div>
+    )
+  }
+
+  if (tool.type === 'native' && tool.id === 'ideas') {
+    return (
+      <div className="h-full overflow-auto bg-zinc-950">
+        <Ideas />
       </div>
     )
   }

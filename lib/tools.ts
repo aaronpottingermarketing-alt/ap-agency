@@ -6,10 +6,18 @@ export type Tool = {
   category: string
   type: ToolType
   url: string
-  icon: 'users' | 'bar-chart' | 'globe' | 'code' | 'check-square'
+  icon: 'users' | 'bar-chart' | 'globe' | 'code' | 'check-square' | 'lightbulb'
 }
 
 export const tools: Tool[] = [
+  {
+    id: 'ad-studio',
+    name: 'Ad Studio',
+    category: 'Copy',
+    type: 'native',
+    url: '',
+    icon: 'code',
+  },
   {
     id: 'client-dashboard',
     name: 'Client Dashboard',
@@ -33,6 +41,14 @@ export const tools: Tool[] = [
     type: 'native',
     url: '',
     icon: 'check-square',
+  },
+  {
+    id: 'ideas',
+    name: 'Ideas',
+    category: 'Productivity',
+    type: 'native',
+    url: '',
+    icon: 'lightbulb',
   },
 ]
 
