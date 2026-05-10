@@ -19,7 +19,7 @@ export default function HabitTracker() {
   const [view, setView] = useState<View>('month')
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
-  const [store, setStore] = useState<HabitStore>({ habits: [], entries: {} })
+  const [store, setStore] = useState<HabitStore>(() => loadStore())
   const [user, setUser] = useState<User | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -106,15 +106,7 @@ export default function HabitTracker() {
     else setMonth(m => m + 1)
   }
 
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <span className="text-zinc-500 text-sm">Loading…</span>
-      </div>
-    )
-  }
-
-  if (!user) {
+  if (!authLoading && !user) {
     return <AuthGate />
   }
 
