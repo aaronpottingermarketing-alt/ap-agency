@@ -27,6 +27,12 @@ const nextConfig: NextConfig = {
     SUPABASE_SERVICE_ROLE_KEY: localEnv.SUPABASE_SERVICE_ROLE_KEY ?? '',
     TELEGRAM_BOT_TOKEN: localEnv.TELEGRAM_BOT_TOKEN ?? '',
     TELEGRAM_ALLOWED_USER_ID: localEnv.TELEGRAM_ALLOWED_USER_ID ?? '',
+    GOOGLE_CLIENT_ID: localEnv.GOOGLE_CLIENT_ID ?? '',
+    GOOGLE_CLIENT_SECRET: localEnv.GOOGLE_CLIENT_SECRET ?? '',
+    MICROSOFT_CLIENT_ID: localEnv.MICROSOFT_CLIENT_ID ?? '',
+    MICROSOFT_CLIENT_SECRET: localEnv.MICROSOFT_CLIENT_SECRET ?? '',
+    CALENDAR_ENCRYPT_KEY: localEnv.CALENDAR_ENCRYPT_KEY ?? '',
+    NEXT_PUBLIC_APP_URL: localEnv.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
   },
   async headers() {
     return [

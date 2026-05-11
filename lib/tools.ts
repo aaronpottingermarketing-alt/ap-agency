@@ -6,7 +6,7 @@ export type Tool = {
   category: string
   type: ToolType
   url: string
-  icon: 'users' | 'bar-chart' | 'globe' | 'code' | 'check-square' | 'lightbulb'
+  icon: 'users' | 'bar-chart' | 'globe' | 'code' | 'check-square' | 'lightbulb' | 'calendar'
 }
 
 export const tools: Tool[] = [
@@ -49,6 +49,14 @@ export const tools: Tool[] = [
     type: 'native',
     url: '',
     icon: 'lightbulb',
+  },
+  {
+    id: 'calendar',
+    name: 'Calendar',
+    category: 'Productivity',
+    type: 'native',
+    url: '',
+    icon: 'calendar',
   },
   {
     id: 'idea-engine',
