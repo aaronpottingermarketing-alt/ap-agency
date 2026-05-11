@@ -66,6 +66,14 @@ export const tools: Tool[] = [
     url: '',
     icon: 'lightbulb',
   },
+  {
+    id: 'wispr',
+    name: 'Wispr',
+    category: 'Productivity',
+    type: 'native',
+    url: '',
+    icon: 'globe',
+  },
 ]
 
 export const categories = [...new Set(tools.map((t) => t.category))]
