@@ -28,6 +28,7 @@ interface Settings {
   language: string
   obsidian_vault: string
   obsidian_folder: string
+  obsidian_auto_save: string
 }
 
 // ── History Tab ───────────────────────────────────────────────────────────────
@@ -39,6 +40,8 @@ function HistoryTab() {
   const [searchTimer, setSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
   const [copied, setCopied] = useState<number | null>(null)
   const [saved, setSaved] = useState<number | null>(null)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [bulkStatus, setBulkStatus] = useState<'idle' | 'copied' | 'saving' | 'saved'>('idle')
   const perPage = 20
 
   const load = useCallback(async (p: number, query: string) => {
@@ -60,6 +63,38 @@ function HistoryTab() {
     setSearchTimer(setTimeout(() => { setPage(1); load(1, val) }, 300))
   }
 
+  const toggleSelect = (id: number) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selected.size === items.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(items.map(i => i.id)))
+    }
+  }
+
+  const selectedItems = items.filter(i => selected.has(i.id))
+
+  const bulkCopy = async () => {
+    const text = selectedItems.map(i => i.text).join('\n\n')
+    await navigator.clipboard.writeText(text)
+    setBulkStatus('copied')
+    setTimeout(() => setBulkStatus('idle'), 2000)
+  }
+
+  const bulkSaveObsidian = async () => {
+    setBulkStatus('saving')
+    await Promise.all(selectedItems.map(i => fetch(`${API}/obsidian/${i.id}`, { method: 'POST' })))
+    setBulkStatus('saved')
+    setTimeout(() => setBulkStatus('idle'), 2000)
+  }
+
   const copyText = async (item: Transcription) => {
     await navigator.clipboard.writeText(item.text)
     setCopied(item.id)
@@ -75,19 +110,57 @@ function HistoryTab() {
   const deleteItem = async (id: number) => {
     await fetch(`${API}/history/${id}`, { method: 'DELETE' })
     setItems(prev => prev.filter(i => i.id !== id))
+    setSelected(prev => { const n = new Set(prev); n.delete(id); return n })
   }
 
   const totalPages = Math.ceil(total / perPage)
 
   return (
     <div className="p-5 flex flex-col gap-4">
-      <input
-        type="text"
-        placeholder="Search transcriptions…"
-        value={q}
-        onChange={e => onSearch(e.target.value)}
-        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none focus:border-zinc-600 transition-colors"
-      />
+      <div className="flex gap-2">
+        <input
+          type="text"
+          placeholder="Search transcriptions…"
+          value={q}
+          onChange={e => onSearch(e.target.value)}
+          className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none focus:border-zinc-600 transition-colors"
+        />
+        {items.length > 0 && (
+          <button
+            onClick={toggleSelectAll}
+            className="text-xs px-3 py-2 rounded-lg border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 transition-colors whitespace-nowrap"
+          >
+            {selected.size === items.length ? 'Deselect all' : 'Select all'}
+          </button>
+        )}
+      </div>
+
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5">
+          <span className="text-xs text-zinc-400">{selected.size} selected</span>
+          <div className="flex gap-2 ml-auto">
+            <button
+              onClick={bulkCopy}
+              className={`text-xs px-3 py-1.5 rounded border transition-colors ${bulkStatus === 'copied' ? 'bg-emerald-900/40 border-emerald-700 text-emerald-400' : 'border-zinc-600 text-zinc-300 hover:border-zinc-400'}`}
+            >
+              {bulkStatus === 'copied' ? 'Copied ✓' : 'Copy all'}
+            </button>
+            <button
+              onClick={bulkSaveObsidian}
+              className={`text-xs px-3 py-1.5 rounded border transition-colors ${bulkStatus === 'saved' ? 'bg-emerald-900/40 border-emerald-700 text-emerald-400' : bulkStatus === 'saving' ? 'border-zinc-600 text-zinc-500' : 'border-zinc-600 text-zinc-300 hover:border-zinc-400'}`}
+            >
+              {bulkStatus === 'saving' ? 'Saving…' : bulkStatus === 'saved' ? 'Saved ✓' : 'Save all to Obsidian'}
+            </button>
+            <button
+              onClick={() => setSelected(new Set())}
+              className="text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
 
       {items.length === 0 ? (
         <p className="text-zinc-600 text-sm text-center py-12">No transcriptions yet — hold Right Option and speak.</p>
@@ -96,9 +169,19 @@ function HistoryTab() {
           {items.map(item => {
             const date = new Date(item.created_at.replace(' ', 'T') + 'Z')
             const dateStr = date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            const isSelected = selected.has(item.id)
             return (
-              <div key={item.id} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+              <div
+                key={item.id}
+                className={`bg-zinc-900 border rounded-lg p-4 transition-colors ${isSelected ? 'border-zinc-600' : 'border-zinc-800'}`}
+              >
                 <div className="flex items-center gap-3 mb-2">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleSelect(item.id)}
+                    className="w-3.5 h-3.5 rounded accent-emerald-500 cursor-pointer"
+                  />
                   <span className="text-xs text-zinc-500">{dateStr}</span>
                   <span className="text-xs text-zinc-600 bg-zinc-800 rounded px-2 py-0.5">{item.word_count} words</span>
                   {item.cost_usd > 0 && (
@@ -217,7 +300,7 @@ function UsageTab() {
 
 // ── Settings Tab ──────────────────────────────────────────────────────────────
 function SettingsTab() {
-  const [settings, setSettings] = useState<Settings>({ language: 'en', obsidian_vault: '', obsidian_folder: '' })
+  const [settings, setSettings] = useState<Settings>({ language: 'en', obsidian_vault: '', obsidian_folder: '', obsidian_auto_save: 'false' })
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
@@ -277,6 +360,21 @@ function SettingsTab() {
           className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-zinc-600"
         />
       )}
+      <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3">
+        <div>
+          <p className="text-sm text-zinc-200 font-medium">Auto-save to Obsidian</p>
+          <p className="text-xs text-zinc-500 mt-0.5">Automatically save every transcription to your vault</p>
+        </div>
+        <button
+          onClick={() => setSettings(s => ({ ...s, obsidian_auto_save: s.obsidian_auto_save === 'true' ? 'false' : 'true' }))}
+          className={`relative w-10 h-5.5 rounded-full transition-colors shrink-0 ${settings.obsidian_auto_save === 'true' ? 'bg-emerald-600' : 'bg-zinc-700'}`}
+          style={{ height: '22px', width: '40px' }}
+        >
+          <span
+            className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${settings.obsidian_auto_save === 'true' ? 'translate-x-5' : 'translate-x-0.5'}`}
+          />
+        </button>
+      </div>
       <div className="flex items-center gap-4">
         <button
           onClick={save}
