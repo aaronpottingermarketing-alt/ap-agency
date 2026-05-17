@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import { loadStore, saveStore, loadFromSupabase, saveToSupabase, dateKey, getGlobalStreak } from './storage'
+import { loadStore, saveStore, loadFromSupabase, saveToSupabase, dateKey, getGlobalStreak, getPerfectDayStreak } from './storage'
 import type { HabitStore } from './types'
 import MonthView from './MonthView'
 import YearView from './YearView'
@@ -233,20 +233,34 @@ export default function HabitTracker() {
       {/* Streak bar */}
       {(() => {
         const { current, best } = getGlobalStreak(store)
-        const label = current === 1 ? 'day' : 'days'
+        const { current: perfectCurrent, best: perfectBest } = getPerfectDayStreak(store)
+        const label = (n: number) => n === 1 ? 'day' : 'days'
         const message = current === 0 ? 'Start your streak today' : current < 3 ? 'Keep it going!' : current < 7 ? 'Building momentum 💪' : 'Unstoppable 🚀'
         return (
           <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-3 bg-zinc-950 border-t-2 border-emerald-500/40 md:left-60">
             <div className="flex items-center gap-3">
+              {/* Any-habit streak */}
               <span className="text-2xl leading-none">🔥</span>
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500 leading-tight mb-0.5">Current Streak</p>
-                <p className="text-base font-bold text-emerald-400 leading-tight">{current} {label}</p>
+                <p className="text-base font-bold text-emerald-400 leading-tight">{current} {label(current)}</p>
               </div>
               <div className="w-px h-8 bg-zinc-800 mx-2" />
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500 leading-tight mb-0.5">Personal Best</p>
-                <p className="text-base font-bold text-zinc-300 leading-tight">{best} {best === 1 ? 'day' : 'days'}</p>
+                <p className="text-base font-bold text-zinc-300 leading-tight">{best} {label(best)}</p>
+              </div>
+              {/* Perfect day streak */}
+              <div className="w-px h-8 bg-zinc-800 mx-2" />
+              <span className="text-2xl leading-none">⭐</span>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500 leading-tight mb-0.5">Perfect Days</p>
+                <p className="text-base font-bold text-amber-400 leading-tight">{perfectCurrent} {label(perfectCurrent)}</p>
+              </div>
+              <div className="w-px h-8 bg-zinc-800 mx-2" />
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500 leading-tight mb-0.5">Best Perfect Run</p>
+                <p className="text-base font-bold text-zinc-300 leading-tight">{perfectBest} {label(perfectBest)}</p>
               </div>
             </div>
             <p className="text-xs text-zinc-600 italic hidden sm:block">{message}</p>
