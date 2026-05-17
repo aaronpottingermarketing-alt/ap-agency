@@ -5,7 +5,7 @@ import type { BudgetSettings } from './types'
 
 type Props = {
   budget: BudgetSettings | null
-  onSave: (monthly: number, yearly: number) => Promise<void>
+  onSave: (monthly: number, yearly: number) => Promise<unknown>
   onClose: () => void
 }
 

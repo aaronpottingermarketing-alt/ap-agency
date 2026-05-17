@@ -6,9 +6,9 @@ import type { SpendEvent, EventType, EventStatus } from './types'
 type Props = {
   event?: SpendEvent | null
   defaultDate?: string
-  onSave: (data: Omit<SpendEvent, 'id' | 'created_at' | 'updated_at'>) => Promise<void>
-  onUpdate: (id: string, patch: Partial<SpendEvent>) => Promise<void>
-  onDelete: (id: string) => Promise<void>
+  onSave: (data: Omit<SpendEvent, 'id' | 'created_at' | 'updated_at'>) => Promise<unknown>
+  onUpdate: (id: string, patch: Partial<SpendEvent>) => Promise<unknown>
+  onDelete: (id: string) => Promise<unknown>
   onClose: () => void
 }
 
