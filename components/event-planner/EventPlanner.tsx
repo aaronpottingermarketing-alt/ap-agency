@@ -171,6 +171,7 @@ export default function EventPlanner() {
                 today={today}
                 onDayClick={(date) => setModal({ type: 'add', date })}
                 onEventClick={(event) => setModal({ type: 'edit', event })}
+                onEventDelete={ep.deleteEvent}
               />
 
               {/* Upcoming Events */}

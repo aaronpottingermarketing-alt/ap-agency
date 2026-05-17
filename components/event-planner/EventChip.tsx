@@ -17,26 +17,36 @@ function fmt(n: number) {
 type Props = {
   event: SpendEvent
   onClick: (event: SpendEvent) => void
+  onDelete: (id: string) => void
 }
 
-export default function EventChip({ event, onClick }: Props) {
+export default function EventChip({ event, onClick, onDelete }: Props) {
   const style = TYPE_STYLES[event.type] ?? TYPE_STYLES.social
   const displaySpend = event.actual_spend != null ? Number(event.actual_spend) : Number(event.estimated_spend)
   const isOverBudget = event.actual_spend != null && Number(event.actual_spend) > Number(event.estimated_spend)
   const isCancelled = event.status === 'cancelled'
 
   return (
-    <button
-      onClick={() => onClick(event)}
-      title={`${event.name} — ${fmt(displaySpend)}`}
-      className={[
-        'w-full text-left rounded px-1.5 py-0.5 text-[11px] border truncate leading-tight transition-opacity',
-        style.bg, style.text,
-        isOverBudget ? 'border-orange-400/60' : style.border,
-        isCancelled ? 'opacity-40 line-through' : 'hover:opacity-90',
-      ].join(' ')}
-    >
-      <span className="truncate">{event.name} {fmt(displaySpend)}</span>
-    </button>
+    <div className="group/chip relative flex items-center">
+      <button
+        onClick={() => onClick(event)}
+        title={`${event.name} — ${fmt(displaySpend)}`}
+        className={[
+          'flex-1 min-w-0 text-left rounded px-1.5 py-0.5 text-[11px] border truncate leading-tight transition-opacity',
+          style.bg, style.text,
+          isOverBudget ? 'border-orange-400/60' : style.border,
+          isCancelled ? 'opacity-40 line-through' : 'hover:opacity-90',
+        ].join(' ')}
+      >
+        <span className="truncate">{event.name} {fmt(displaySpend)}</span>
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onDelete(event.id) }}
+        title="Remove event"
+        className="absolute right-0.5 top-1/2 -translate-y-1/2 hidden group-hover/chip:flex items-center justify-center w-3.5 h-3.5 rounded-full bg-zinc-700 hover:bg-red-500 text-zinc-300 hover:text-white transition-colors text-[9px] leading-none"
+      >
+        ×
+      </button>
+    </div>
   )
 }

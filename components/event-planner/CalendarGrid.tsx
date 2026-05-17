@@ -22,9 +22,10 @@ type Props = {
   today: Date
   onDayClick: (date: string) => void
   onEventClick: (event: SpendEvent) => void
+  onEventDelete: (id: string) => void
 }
 
-export default function CalendarGrid({ year, month, events, today, onDayClick, onEventClick }: Props) {
+export default function CalendarGrid({ year, month, events, today, onDayClick, onEventClick, onEventDelete }: Props) {
   const totalDays = daysInMonth(year, month)
   const startOffset = firstDayOfMonth(year, month)
   const todayStr = today.toISOString().split('T')[0]
@@ -89,10 +90,8 @@ export default function CalendarGrid({ year, month, events, today, onDayClick, o
                   <EventChip
                     key={e.id}
                     event={e}
-                    onClick={(ev) => {
-                      ev
-                      onEventClick(e)
-                    }}
+                    onClick={() => onEventClick(e)}
+                    onDelete={onEventDelete}
                   />
                 ))}
                 {dayEvents.length > 3 && (
