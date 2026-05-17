@@ -35,10 +35,12 @@ export default function HabitTracker() {
           setStore(remote)
           saveStore(remote) // sync local cache
         } else {
-          // first time on this device — push local data up
+          // first time on this device — push local data up only if there's something worth saving
           const local = loadStore()
           setStore(local)
-          await saveToSupabase(u.id, local)
+          if (Object.keys(local.entries).length > 0) {
+            await saveToSupabase(u.id, local)
+          }
         }
       }
       setAuthLoading(false)
@@ -55,7 +57,9 @@ export default function HabitTracker() {
         } else {
           const local = loadStore()
           setStore(local)
-          await saveToSupabase(u.id, local)
+          if (Object.keys(local.entries).length > 0) {
+            await saveToSupabase(u.id, local)
+          }
         }
         setAuthLoading(false)
       }

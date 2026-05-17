@@ -33,14 +33,22 @@ export async function loadFromSupabase(userId: string): Promise<HabitStore | nul
     .select('data')
     .eq('user_id', userId)
     .single()
-  if (error || !data) return null
+  if (error) {
+    if (error.code !== 'PGRST116') console.error('[habit] load error:', error.message)
+    return null
+  }
+  if (!data) return null
   return data.data as HabitStore
 }
 
 export async function saveToSupabase(userId: string, store: HabitStore): Promise<void> {
-  await supabase
+  const { error } = await supabase
     .from('habit_tracker_data')
-    .upsert({ user_id: userId, data: store, updated_at: new Date().toISOString() })
+    .upsert(
+      { user_id: userId, data: store, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' }
+    )
+  if (error) console.error('[habit] save error:', error.message)
 }
 
 export function dateKey(year: number, month: number, day: number): string {

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { tools, categories } from '@/lib/tools'
 import type { Tool } from '@/lib/tools'
 
@@ -70,6 +70,19 @@ function ToolIcon({ icon }: { icon: Tool['icon'] }) {
   )
 }
 
+function DragHandle() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab active:cursor-grabbing">
+      <circle cx="9" cy="6" r="1.5" />
+      <circle cx="15" cy="6" r="1.5" />
+      <circle cx="9" cy="12" r="1.5" />
+      <circle cx="15" cy="12" r="1.5" />
+      <circle cx="9" cy="18" r="1.5" />
+      <circle cx="15" cy="18" r="1.5" />
+    </svg>
+  )
+}
+
 function HamburgerIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -89,7 +102,65 @@ function CloseIcon() {
   )
 }
 
+const STORAGE_KEY = 'ap-sidebar-order'
+
 function NavContent({ pathname }: { pathname: string }) {
+  const [categoryOrder, setCategoryOrder] = useState<Record<string, string[]>>({})
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const dragItem = useRef<{ id: string; category: string } | null>(null)
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) setCategoryOrder(JSON.parse(saved))
+    } catch {}
+  }, [])
+
+  function getOrderedTools(category: string): Tool[] {
+    const categoryTools = tools.filter((t) => t.category === category)
+    const order = categoryOrder[category]
+    if (!order) return categoryTools
+    const ordered = order
+      .map((id) => categoryTools.find((t) => t.id === id))
+      .filter(Boolean) as Tool[]
+    const unseen = categoryTools.filter((t) => !order.includes(t.id))
+    return [...ordered, ...unseen]
+  }
+
+  function saveOrder(category: string, ids: string[]) {
+    const next = { ...categoryOrder, [category]: ids }
+    setCategoryOrder(next)
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch {}
+  }
+
+  function handleDragStart(id: string, category: string) {
+    dragItem.current = { id, category }
+  }
+
+  function handleDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault()
+    setDragOverId(id)
+  }
+
+  function handleDrop(category: string) {
+    if (!dragItem.current || dragItem.current.category !== category) return
+    const ids = getOrderedTools(category).map((t) => t.id)
+    const from = ids.indexOf(dragItem.current.id)
+    const to = dragOverId ? ids.indexOf(dragOverId) : ids.length - 1
+    if (from === -1 || to === -1 || from === to) return
+    const reordered = [...ids]
+    reordered.splice(from, 1)
+    reordered.splice(to, 0, dragItem.current.id)
+    saveOrder(category, reordered)
+    dragItem.current = null
+    setDragOverId(null)
+  }
+
+  function handleDragEnd() {
+    dragItem.current = null
+    setDragOverId(null)
+  }
+
   return (
     <div className="flex flex-col h-full">
       {/* Brand */}
@@ -110,28 +181,36 @@ function NavContent({ pathname }: { pathname: string }) {
               {category}
             </p>
             <ul className="flex flex-col gap-0.5">
-              {tools
-                .filter((t) => t.category === category)
-                .map((tool) => {
-                  const isActive = pathname === `/tool/${tool.id}`
-                  return (
-                    <li key={tool.id}>
-                      <Link
-                        href={`/tool/${tool.id}`}
-                        className={`flex items-center gap-3 px-2 py-2 rounded-md text-sm transition-colors ${
-                          isActive
-                            ? 'bg-zinc-800 text-zinc-100'
-                            : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'
-                        }`}
-                      >
-                        <span className={isActive ? 'text-zinc-300' : 'text-zinc-500'}>
-                          <ToolIcon icon={tool.icon} />
-                        </span>
-                        {tool.name}
-                      </Link>
-                    </li>
-                  )
-                })}
+              {getOrderedTools(category).map((tool) => {
+                const isActive = pathname === `/tool/${tool.id}`
+                const isDragTarget = dragOverId === tool.id && dragItem.current?.category === category
+                return (
+                  <li
+                    key={tool.id}
+                    draggable
+                    onDragStart={() => handleDragStart(tool.id, category)}
+                    onDragOver={(e) => handleDragOver(e, tool.id)}
+                    onDrop={() => handleDrop(category)}
+                    onDragEnd={handleDragEnd}
+                    className={`group transition-all ${isDragTarget ? 'border-t-2 border-zinc-400' : 'border-t-2 border-transparent'}`}
+                  >
+                    <Link
+                      href={`/tool/${tool.id}`}
+                      className={`flex items-center gap-3 px-2 py-2 rounded-md text-sm transition-colors ${
+                        isActive
+                          ? 'bg-zinc-800 text-zinc-100'
+                          : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'
+                      }`}
+                    >
+                      <DragHandle />
+                      <span className={isActive ? 'text-zinc-300' : 'text-zinc-500'}>
+                        <ToolIcon icon={tool.icon} />
+                      </span>
+                      {tool.name}
+                    </Link>
+                  </li>
+                )
+              })}
             </ul>
           </div>
         ))}
