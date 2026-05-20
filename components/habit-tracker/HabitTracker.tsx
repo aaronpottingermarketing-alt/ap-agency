@@ -49,12 +49,13 @@ export default function HabitTracker() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const u = session?.user ?? null
       setUser(u)
-      if (u && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+      if (u && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')) {
         const remote = await loadFromSupabase(u.id)
         if (remote) {
           setStore(remote)
           saveStore(remote)
-        } else {
+        } else if (event === 'SIGNED_IN') {
+          // First time on this device — push local data up only if there's something worth saving
           const local = loadStore()
           setStore(local)
           if (Object.keys(local.entries).length > 0) {

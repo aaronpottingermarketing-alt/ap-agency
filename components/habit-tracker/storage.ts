@@ -34,7 +34,8 @@ export async function loadFromSupabase(userId: string): Promise<HabitStore | nul
     .eq('user_id', userId)
     .single()
   if (error) {
-    if (error.code !== 'PGRST116') console.error('[habit] load error:', error.message)
+    // PGRST116 = no rows found (first-time user) — expected, not an error
+    if (error.code !== 'PGRST116') console.error('[habit] load error:', error.code, error.message)
     return null
   }
   if (!data) return null
